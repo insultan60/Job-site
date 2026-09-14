@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { adminRoutes } from "@/lib/routes";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { PageLoader } from "@/components/Loader";
 
@@ -16,11 +17,25 @@ export default function DashboardGate({
   const {
     user, loading, profile, profileLoading, profileError, refreshProfile,
     logout, emailVerified, resendVerificationEmail, checkEmailVerified,
+    isAdmin,
   } = useAuth();
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
   }, [loading, user, router]);
+
+  /* An admin with no recruiter profile has nothing on this page - the branch
+     below would tell them they have no account and offer to register one,
+     which is the wrong answer for someone who signed in to administer the
+     site. Send them where their account actually works. An account that is
+     both admin and recruiter has a profile, so it never reaches this and
+     keeps its dashboard. */
+  const adminWithoutRecruiterProfile =
+    !loading && !profileLoading && !!user && isAdmin && !profile && !profileError;
+
+  useEffect(() => {
+    if (adminWithoutRecruiterProfile) router.replace(adminRoutes.base);
+  }, [adminWithoutRecruiterProfile, router]);
 
   /* Sign out before sending them to /signup or /login. Both pages bounce a
      signed-in visitor straight back here, so without this the buttons below
@@ -33,11 +48,20 @@ export default function DashboardGate({
   const switchAccount = () => goSignedOut("/login");
 
   if (loading || !user || profileLoading) return <PageLoader />;
+  if (adminWithoutRecruiterProfile) return <PageLoader />;
 
   /* Signed in, but hasn't clicked the link in their verification email yet.
      Enforced here for the dashboard UI; POST /api/submissions enforces the
-     same rule server-side, since a client-only gate is just presentation. */
-  if (!emailVerified) {
+     same rule server-side, since a client-only gate is just presentation.
+
+     Admins are exempt, and have to be. The gate exists to stop an unverified
+     recruiter submitting candidates, which is not what an admin account is
+     for, and admin logins are routinely on addresses that cannot receive a
+     verification email at all - so for them this screen is not a step, it is
+     a locked door with no key. isAdmin is a server-side lookup arriving from
+     /api/me, not a claim the browser can make for itself, so exempting on it
+     does not weaken the rule it enforces. */
+  if (!emailVerified && !isAdmin) {
     return (
       <VerifyEmailScreen
         email={user.email}
