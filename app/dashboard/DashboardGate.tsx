@@ -17,7 +17,7 @@ export default function DashboardGate({
   const {
     user, loading, profile, profileLoading, profileError, refreshProfile,
     logout, emailVerified, resendVerificationEmail, checkEmailVerified,
-    isAdmin,
+    isAdmin, profileErrorMessage,
   } = useAuth();
 
   useEffect(() => {
@@ -81,9 +81,14 @@ export default function DashboardGate({
         <div className="w-full max-w-sm rounded-2xl border border-line bg-white p-8 text-center">
           <h1 className="font-bold text-ink">Couldn&apos;t load your account</h1>
           <p className="mt-1 text-sm text-muted">
-            You&apos;re still signed in as {user.email} — we just couldn&apos;t
-            reach the server. Your account and submissions are safe.
+            You&apos;re still signed in as {user.email}. Your account and
+            submissions are safe.
           </p>
+          {profileErrorMessage && (
+            <p className="mt-3 rounded-lg bg-surface px-3 py-2 text-left text-xs text-muted">
+              {profileErrorMessage}
+            </p>
+          )}
           <button
             type="button"
             onClick={() => refreshProfile()}

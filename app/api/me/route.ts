@@ -34,7 +34,21 @@ export function GET(req: Request) {
     // pending invite was for — claim it now rather than making them wait for
     // some other trigger. Cheap: one indexed lookup by email when it misses.
     const admin = alreadyAdmin || (await claimAdminInvite(uid, email, displayName(name, email)));
-    if (admin) await touchAdminActivity(uid);
+
+    /* "Last seen" bookkeeping, and nothing depends on it. It used to be
+       awaited bare, which meant a failed UPDATE here - a missing column after
+       a partial migration, a locked row, the shared host dropping the
+       connection - threw out of the whole handler and returned 500. The only
+       people who reach this line are admins, so the effect was that admins,
+       and only admins, were locked out of the console by a write whose result
+       nobody reads. Log it and carry on. */
+    if (admin) {
+      try {
+        await touchAdminActivity(uid);
+      } catch (err) {
+        console.error("[api/me] touchAdminActivity failed for", uid, err);
+      }
+    }
 
     const profile =
       existing ?? (admin ? null : await ensureUserProfile(uid, displayName(name, email), email));

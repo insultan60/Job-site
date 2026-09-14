@@ -13,7 +13,7 @@ function Gate({ children }: { children: React.ReactNode }) {
   /* isAdmin now arrives with the profile from /api/me — no separate lookup.
      This gate is convenience only: it hides the UI. The actual enforcement is
      requireAdmin() on every /api/admin route, which a client cannot bypass. */
-  const { user, loading, isAdmin, profileLoading, profileError, refreshProfile } =
+  const { user, loading, isAdmin, profileLoading, profileError, profileErrorMessage, refreshProfile } =
     useAuth();
 
   // Login + the temporary setup page render on their own (no admin gate).
@@ -43,9 +43,18 @@ function Gate({ children }: { children: React.ReactNode }) {
         <div className="w-full max-w-sm rounded-2xl border border-line bg-white p-8 text-center">
           <h1 className="font-bold text-ink">Couldn&apos;t load the console</h1>
           <p className="mt-1 text-sm text-muted">
-            You&apos;re still signed in as {user.email} — we just couldn&apos;t
-            reach the server to confirm your access. This is usually temporary.
+            You&apos;re still signed in as {user.email}, but we couldn&apos;t
+            confirm your access.
           </p>
+          {/* The reason, verbatim from the server. This screen used to say
+              "this is usually temporary" whatever had happened, so a refused
+              request and a real outage looked identical and the only offer
+              was a retry that could never work for the first of those. */}
+          {profileErrorMessage && (
+            <p className="mt-3 rounded-lg bg-surface px-3 py-2 text-left text-xs text-muted">
+              {profileErrorMessage}
+            </p>
+          )}
           <button
             type="button"
             onClick={() => refreshProfile()}

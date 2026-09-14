@@ -38,6 +38,11 @@ type AuthContextValue = {
      database as "you have no account" bounces a signed-in admin out of the
      console and makes them log in again for no reason. */
   profileError: boolean;
+  /* What actually went wrong, when something did. The boolean alone made every
+     failure look identical, so a 403 the visitor could act on and a genuine
+     outage both rendered as "this is usually temporary" - and the visitor
+     retried forever on something retrying could never fix. */
+  profileErrorMessage: string | null;
   /* Firebase's own record, mirrored into state (not just read off `user`) so
      that re-checking it after the visitor clicks the email link can trigger a
      re-render — reloading a Firebase User mutates the same object in place,
@@ -65,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profileLoading, setProfileLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [profileError, setProfileError] = useState(false);
+  const [profileErrorMessage, setProfileErrorMessage] = useState<string | null>(null);
   const [emailVerified, setEmailVerified] = useState(false);
 
   useEffect(() => {
@@ -80,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(null);
       setIsAdmin(false);
       setProfileError(false);
+      setProfileErrorMessage(null);
       setProfileLoading(false);
       return;
     }
@@ -89,7 +96,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(me.profile);
       setIsAdmin(me.isAdmin);
       setProfileError(false);
-    } catch {
+      setProfileErrorMessage(null);
+    } catch (err) {
       /* Never leave a stale isAdmin=true behind on a failed refresh — that
          would be a privilege decision made on stale data. But do record that
          this was a failure, so the gates can offer a retry instead of
@@ -97,6 +105,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(null);
       setIsAdmin(false);
       setProfileError(true);
+      setProfileErrorMessage(
+        err instanceof Error && err.message ? err.message : null,
+      );
     } finally {
       setProfileLoading(false);
     }
@@ -115,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     profileLoading,
     isAdmin,
     profileError,
+    profileErrorMessage,
     emailVerified,
     refreshProfile: () => loadProfile(user),
     login: async (email, password) => {
