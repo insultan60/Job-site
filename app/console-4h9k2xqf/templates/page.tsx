@@ -15,6 +15,7 @@ import {
 } from "@/lib/adminEmailTemplates";
 import { Loader } from "@/components/Loader";
 import { LoadError, errorMessage } from "@/components/admin/LoadError";
+import { BroadcastComposer } from "@/components/admin/BroadcastComposer";
 
 /* Write your own message templates.
  *
@@ -122,8 +123,9 @@ export default function MessageTemplatesPage() {
             Message templates
           </h1>
           <p className="mt-1 max-w-xl text-xs text-muted">
-            Starting points for messaging a recruiter. They load into the compose box and
-            you edit before sending, so a template never has to fit perfectly.
+            Starting points for messaging recruiters. Send one to a whole group below, or
+            load it into the compose box on a recruiter&apos;s page. Either way you edit
+            before sending, so a template never has to fit perfectly.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -144,6 +146,10 @@ export default function MessageTemplatesPage() {
             {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
           </button>
         </div>
+      </div>
+
+      <div className="mb-6">
+        <BroadcastComposer />
       </div>
 
       {notice && (
