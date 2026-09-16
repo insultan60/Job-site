@@ -23,6 +23,7 @@ const ACTION_LABEL: Record<AdminAuditAction, string> = {
   submission_status_changed: "Status changed",
   profile_reminder_sent: "Reminder sent",
   email_sent: "Email sent",
+  broadcast_sent: "Broadcast sent",
 };
 
 const ACTION_STYLE: Record<AdminAuditAction, string> = {
@@ -42,6 +43,7 @@ const ACTION_STYLE: Record<AdminAuditAction, string> = {
   submission_status_changed: "bg-primary-soft text-primary",
   profile_reminder_sent: "bg-cream text-muted",
   email_sent: "bg-primary-soft text-primary",
+  broadcast_sent: "bg-primary-soft text-primary",
 };
 
 /** The verb phrase after the target's name — kept as a lookup rather than a
@@ -63,6 +65,7 @@ const ACTION_VERB: Partial<Record<AdminAuditAction, string>> = {
   submission_status_changed: "'s status was changed",
   profile_reminder_sent: "was sent a profile reminder",
   email_sent: "was emailed",
+  broadcast_sent: "were sent a broadcast",
 };
 
 export default function AdminAuditLogPage() {

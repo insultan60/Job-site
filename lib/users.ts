@@ -90,7 +90,8 @@ export type AdminAuditAction =
   | "jobs_synced"
   | "submission_status_changed"
   | "profile_reminder_sent"
-  | "email_sent";
+  | "email_sent"
+  | "broadcast_sent";
 
 /** One entry in the admin action history — every sensitive action taken from
     the console, not just changes to the admin allow-list. */
@@ -301,6 +302,52 @@ export type BulkReminderResult = {
 export function sendProfileReminderToAll(): Promise<BulkReminderResult> {
   return apiFetch<BulkReminderResult>("/api/admin/recruiters/remind-all", {
     method: "POST",
+    auth: true,
+  });
+}
+
+export type BroadcastResult = {
+  audience: string;
+  audienceLabel: string;
+  /** How many the audience held for this run. */
+  total: number;
+  /** Reached on at least one channel. */
+  sent: number;
+  emailed: number;
+  notified: number;
+  /** Nothing got through to these — worth showing by name. */
+  failed: { name: string; email: string }[];
+  /** Email was asked for, but there's no address on file. */
+  skippedNoEmail: number;
+  /** Left unsent because the request ran out of time. Pass these back as
+      `only` to carry on without mailing the first batch twice. */
+  remainingUids: string[];
+};
+
+export type BroadcastInput = {
+  /** An AudienceId from lib/audiences.ts. The server resolves it to people. */
+  audience: string;
+  /** Only the button is read from the template; subject and body are sent
+      as typed, so the admin gets what they read back in the preview. */
+  templateId: string;
+  subject: string;
+  body: string;
+  email?: boolean;
+  notify?: boolean;
+  /** Continuation: restrict to these uids, intersected with the audience. */
+  only?: string[];
+  /** Send again even though the same message went to the same audience
+      moments ago. */
+  force?: boolean;
+};
+
+/** Admin action: send one message to a whole audience of recruiters. The
+    recipient list is resolved server-side from `audience` — this never takes
+    addresses, so it can't reach anyone without an account here. */
+export function sendBroadcast(input: BroadcastInput): Promise<BroadcastResult> {
+  return apiFetch<BroadcastResult>("/api/admin/recruiters/broadcast", {
+    method: "POST",
+    body: input,
     auth: true,
   });
 }
