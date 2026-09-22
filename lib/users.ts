@@ -288,6 +288,9 @@ export type BulkDeleteResult = {
   notFound: number;
   /** Deliberately kept: admin accounts, and the caller's own. */
   refused: { uid: string; name: string; reason: string }[];
+  /** Deleted, but the audit entry could not be written — the audit ENUM
+      migration has not been applied to this database. */
+  auditFailed: number;
 };
 
 /** Admin action: permanently delete recruiter accounts. Submitted candidates

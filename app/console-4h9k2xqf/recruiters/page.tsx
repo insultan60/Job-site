@@ -404,6 +404,13 @@ function RecruitersList() {
               {deleteResult.notFound} had already been deleted.
             </p>
           )}
+          {deleteResult.auditFailed > 0 && (
+            <p className="mt-2 text-xs font-semibold text-coral">
+              {deleteResult.auditFailed} of these could not be written to the audit log. The
+              accounts are gone, but there is no record of who removed them. Run
+              scripts/db-migrate-audit-recruiter-deleted.mjs against this database.
+            </p>
+          )}
           {deleteResult.refused.length > 0 && (
             <ul className="mt-2 space-y-1">
               {deleteResult.refused.map((r) => (

@@ -72,6 +72,10 @@ export function DELETE(req: Request) {
     const deleted: { uid: string; name: string; email: string; submissions: number }[] = [];
     const notFound: string[] = [];
     const refused: { uid: string; name: string; reason: string }[] = [];
+    /* Deletes that went through but could not be written to the audit log.
+       Almost always one cause: db-migrate-audit-recruiter-deleted.mjs has not
+       been run against this database. */
+    let auditFailed = 0;
 
     for (const uid of uids) {
       const recruiter = await getUserProfile(uid);
@@ -107,20 +111,33 @@ export function DELETE(req: Request) {
 
       /* One entry per account, not one per batch. The audit log is where
          "where did this recruiter go" gets answered months later, and that
-         question is always about one person. */
-      await logAdminAction({
-        action: "recruiter_deleted",
-        actorUid: actor.uid,
-        actorName: actor.name,
-        actorEmail: actor.email,
-        targetUid: uid,
-        targetName: recruiter.name,
-        targetEmail: recruiter.email,
-        details:
-          submissions > 0
-            ? `Deleted with ${submissions} submission${submissions === 1 ? "" : "s"} (kept, recruiter cleared)`
-            : "Deleted with no submissions",
-      });
+         question is always about one person.
+
+         Wrapped, because the row is already gone by the time this runs. The
+         action column is an ENUM under STRICT_ALL_TABLES, so on a database
+         where the migration has not been applied this insert throws, handle()
+         turns it into a 500, and the console reports failure for a delete
+         that actually succeeded — the worst of both. Reported instead: the
+         accounts are gone, the response says the audit entry is missing, and
+         the admin is told to run the migration rather than left guessing. */
+      try {
+        await logAdminAction({
+          action: "recruiter_deleted",
+          actorUid: actor.uid,
+          actorName: actor.name,
+          actorEmail: actor.email,
+          targetUid: uid,
+          targetName: recruiter.name,
+          targetEmail: recruiter.email,
+          details:
+            submissions > 0
+              ? `Deleted with ${submissions} submission${submissions === 1 ? "" : "s"} (kept, recruiter cleared)`
+              : "Deleted with no submissions",
+        });
+      } catch (err) {
+        console.error("[api] recruiter delete: audit write failed", err);
+        auditFailed += 1;
+      }
     }
 
     return ok({
@@ -132,6 +149,7 @@ export function DELETE(req: Request) {
       submissionsDetached: deleted.reduce((n, d) => n + d.submissions, 0),
       notFound: notFound.length,
       refused,
+      auditFailed,
     });
   });
 }
