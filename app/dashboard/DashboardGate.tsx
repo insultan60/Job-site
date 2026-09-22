@@ -66,7 +66,15 @@ export default function DashboardGate({
       <VerifyEmailScreen
         email={user.email}
         onResend={resendVerificationEmail}
-        onRecheck={checkEmailVerified}
+        /* Refetch on success, not just flip the flag: the recruiter row is
+           created by GET /api/me on the first load with a verified token, so
+           this call is what brings the account into existence. Without it the
+           gate would fall through to the "no profile" screen. */
+        onRecheck={async () => {
+          const verified = await checkEmailVerified();
+          if (verified) await refreshProfile();
+          return verified;
+        }}
         onSwitchAccount={switchAccount}
       />
     );

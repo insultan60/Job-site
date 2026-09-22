@@ -3,7 +3,7 @@ import {
   getUserProfile, createUserProfile, ensureUserProfile, updateUserProfile,
   claimAdminInvite, touchAdminActivity, ownsVideoFile,
 } from "@/lib/server/repo";
-import { requireUid, requireIdentity, isAdmin } from "@/lib/server/auth";
+import { requireUid, requireVerifiedUid, requireIdentity, isAdmin } from "@/lib/server/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,13 +18,30 @@ function displayName(name: string, email: string): string {
 
 /** The caller's own profile, plus whether they're an admin.
  *
- *  Signing in is what makes you a recruiter here: if a signed-in account has no
- *  profile row yet, this creates one from the verified token rather than
- *  handing back null. `profile` is therefore null only for an admin-only
- *  account, which deliberately stays out of the recruiter table. */
+ *  Verifying your email is what makes you a recruiter here. A signed-in
+ *  account with a verified email and no profile row gets one created from the
+ *  token; an unverified one gets `profile: null` and stays out of the
+ *  recruiter table entirely. `profile` is therefore null for exactly two
+ *  cases: an admin-only account, and someone who has not clicked the link yet.
+ *
+ *  WHY VERIFICATION GATES THE ROW, NOT JUST THE ACTIONS
+ *
+ *  It used to create the row on any sign-in. Creating a Firebase account
+ *  costs a bot nothing — an address it does not own is fine, because it never
+ *  needs to read the mail — so the console's recruiter list filled with
+ *  signups that had a plausible harvested email, a random name, and no way to
+ *  ever do anything (every write already goes through requireVerifiedUid).
+ *  Dozens of rows an admin had to read and delete, for accounts that were
+ *  never going to become real.
+ *
+ *  Deferring the row costs a genuine recruiter nothing: DashboardGate shows
+ *  them the verify-email screen before it ever looks at the profile, and the
+ *  row appears the moment they come back from the link. The name they typed
+ *  at signup is on the Firebase account as displayName, so it arrives in the
+ *  token and is not lost by the wait. */
 export function GET(req: Request) {
   return handle(async () => {
-    const { uid, email, name } = await requireIdentity(req);
+    const { uid, email, name, emailVerified } = await requireIdentity(req);
     const [existing, alreadyAdmin] = await Promise.all([
       getUserProfile(uid),
       isAdmin(uid),
@@ -51,16 +68,28 @@ export function GET(req: Request) {
     }
 
     const profile =
-      existing ?? (admin ? null : await ensureUserProfile(uid, displayName(name, email), email));
+      existing ??
+      (admin || !emailVerified
+        ? null
+        : await ensureUserProfile(uid, displayName(name, email), email));
 
     return ok({ profile, isAdmin: admin });
   });
 }
 
-/** Create the caller's profile at signup. uid comes from the token. */
+/* Create the caller's profile. uid comes from the token.
+ *
+ * Verified callers only, for the same reason as GET: without it this is an
+ * open door to the recruiter table for anyone holding a freshly minted
+ * Firebase account, which is free to create against any address.
+ *
+ * The signup flow still calls this and still ignores a failure (see
+ * lib/auth.tsx). That is now the normal path rather than an edge case: the
+ * call is refused at signup because nobody has clicked anything yet, and the
+ * row is created by GET /api/me on the first load after verification. */
 export function POST(req: Request) {
   return handle(async () => {
-    const uid = await requireUid(req);
+    const uid = await requireVerifiedUid(req);
     const body = await jsonBody(req);
     await createUserProfile(
       uid,

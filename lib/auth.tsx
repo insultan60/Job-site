@@ -163,6 +163,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!auth.currentUser) return false;
       await auth.currentUser.reload();
       const verified = auth.currentUser.emailVerified;
+      /* Force a new ID token once it flips.
+       *
+       * reload() updates the SDK's user object, not the cached token, and
+       * getIdToken() keeps serving that cache until it nears expiry — up to
+       * an hour. The server reads email_verified from the token, so without
+       * this the browser believes the account is verified while every
+       * request still says otherwise: requireVerifiedUid refuses the first
+       * submission, and GET /api/me declines to create the recruiter row. */
+      if (verified) await auth.currentUser.getIdToken(true);
       setEmailVerified(verified);
       return verified;
     },
