@@ -84,6 +84,7 @@ export type AdminAuditAction =
   | "recruiter_unverified"
   | "recruiter_suspended"
   | "recruiter_reinstated"
+  | "recruiter_deleted"
   | "site_builder_unlocked"
   | "site_builder_locked"
   | "job_deleted"
@@ -272,6 +273,35 @@ export async function setRecruiterSiteBuilderEnabled(
 
 /** Admin action: email this recruiter a reminder to finish their profile.
     Refused server-side if the profile is already complete. */
+/** What a bulk delete actually did. Counted by outcome because
+    "deleted 37" is not the whole story when two were refused and one had
+    already gone. */
+export type BulkDeleteResult = {
+  deleted: number;
+  /** Ids removed, so the caller can drop them from a list it already holds. */
+  deletedUids: string[];
+  /** Names (or emails) of the accounts removed, for the confirmation line. */
+  deletedNames: string[];
+  /** Submissions that stayed but lost their recruiter attribution. */
+  submissionsDetached: number;
+  /** Selected but already gone — someone else deleted them, or the list was stale. */
+  notFound: number;
+  /** Deliberately kept: admin accounts, and the caller's own. */
+  refused: { uid: string; name: string; reason: string }[];
+};
+
+/** Admin action: permanently delete recruiter accounts. Submitted candidates
+    survive with their recruiter attribution cleared; admin accounts and the
+    caller's own account are refused. Firebase Auth is not touched, so signing
+    in again would create a fresh, blank profile. */
+export function deleteRecruiters(uids: string[]): Promise<BulkDeleteResult> {
+  return apiFetch<BulkDeleteResult>("/api/admin/recruiters", {
+    method: "DELETE",
+    body: { uids },
+    auth: true,
+  });
+}
+
 export async function sendProfileReminder(uid: string): Promise<void> {
   await apiFetch(`/api/admin/recruiters/${encodeURIComponent(uid)}/remind-profile`, {
     method: "POST",

@@ -878,6 +878,51 @@ export async function setSiteBuilderEnabled(uid: string, value: boolean): Promis
   return result.affectedRows > 0;
 }
 
+/** How many candidates this recruiter has submitted. Read before a delete so
+    the console can warn that real work is attached to the account, and so the
+    audit entry records what was lost. */
+export async function countSubmissionsByRecruiter(uid: string): Promise<number> {
+  const row = await queryOne<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM submissions WHERE recruiter_id = ?",
+    [uid],
+  );
+  return Number(row?.n ?? 0);
+}
+
+/* Delete a recruiter's account.
+ *
+ * One statement is enough. Every table that references users(uid) already
+ * declares its own behaviour, so the database decides what follows rather
+ * than this function guessing:
+ *
+ *   candidates, recruiter_sites, notifications, site_leads  ON DELETE CASCADE
+ *   submissions.recruiter_id, files.owner_uid,
+ *   submission_messages.sender_uid                          ON DELETE SET NULL
+ *
+ * So submitted candidates survive with their recruiter attribution cleared,
+ * which is the right trade: the submission is the client's record, not the
+ * recruiter's, and deleting a spam signup should never delete a real
+ * placement.
+ *
+ * What this does NOT do is touch Firebase Auth — the server verifies ID
+ * tokens with jose and holds no service-account key (see lib/server/auth.ts).
+ * If a deleted person signs in again, GET /api/me creates a fresh blank
+ * profile. For bot signups that is academic; for a real person it means the
+ * delete is a reset, not a ban.
+ */
+export async function deleteRecruiter(uid: string): Promise<boolean> {
+  const result = await execute("DELETE FROM users WHERE uid = ?", [uid]);
+  return result.affectedRows > 0;
+}
+
+/** Whether this uid holds console access. Checked before a delete: an admin's
+    recruiter profile is not something to remove from the recruiter list by
+    accident — revoke the access first, deliberately, on the Admins page. */
+export async function isAdminUid(uid: string): Promise<boolean> {
+  const row = await queryOne<{ uid: string }>("SELECT uid FROM admins WHERE uid = ?", [uid]);
+  return Boolean(row);
+}
+
 /** Stamps that an admin just sent this recruiter the "complete your profile"
     reminder email — see POST /api/admin/recruiters/[uid]/remind-profile. */
 export async function markProfileReminderSent(uid: string): Promise<boolean> {

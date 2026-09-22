@@ -122,7 +122,7 @@ CREATE TABLE admin_audit_log (
   action       ENUM(
     'grant','revoke','invite','invite_claimed','invite_cancelled',
     'recruiter_verified','recruiter_unverified',
-    'recruiter_suspended','recruiter_reinstated',
+    'recruiter_suspended','recruiter_reinstated','recruiter_deleted',
     'site_builder_unlocked','site_builder_locked',
     'job_deleted','jobs_synced','submission_status_changed','profile_reminder_sent',
     'email_sent','broadcast_sent'

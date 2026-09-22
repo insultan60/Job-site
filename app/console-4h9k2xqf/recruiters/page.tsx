@@ -5,8 +5,8 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { adminRoutes } from "@/lib/routes";
 import {
-  listAllUsers, sendProfileReminderToAll,
-  type BulkReminderResult, type UserProfile,
+  listAllUsers, sendProfileReminderToAll, deleteRecruiters,
+  type BulkReminderResult, type BulkDeleteResult, type UserProfile,
 } from "@/lib/users";
 import { listAllSubmissions, type Submission } from "@/lib/submissions";
 import { Loader } from "@/components/Loader";
@@ -110,6 +110,13 @@ function RecruitersList() {
   const [reminding, setReminding] = useState(false);
   const [reminderResult, setReminderResult] = useState<BulkReminderResult | null>(null);
   const [reminderError, setReminderError] = useState<string | null>(null);
+  /* Selection for bulk delete. A Set of uids rather than a flag on each row:
+     the selection has to survive paging and re-sorting, and the rows are
+     recreated on every filter change. */
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+  const [deleteResult, setDeleteResult] = useState<BulkDeleteResult | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const { confirm, dialog } = useConfirm();
 
   useEffect(() => {
@@ -205,6 +212,98 @@ function RecruitersList() {
   const currentPage = Math.min(page, totalPages);
   const paginated = shown.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
+  /* ---------------------------------------------------------- selection */
+
+  function toggleOne(uid: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid);
+      else next.add(uid);
+      return next;
+    });
+  }
+
+  const pageSelected = paginated.filter((u) => selected.has(u.uid)).length;
+  const allPageSelected = paginated.length > 0 && pageSelected === paginated.length;
+
+  function togglePage() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) for (const u of paginated) next.delete(u.uid);
+      else for (const u of paginated) next.add(u.uid);
+      return next;
+    });
+  }
+
+  /* Everything the current filter matches, not just this page — the point of
+     the status tabs is that "Pending verification" is the bot pile, and
+     clearing it 24 at a time is the problem this button exists to solve. */
+  function selectAllMatching() {
+    setSelected(new Set(shown.map((u) => u.uid)));
+  }
+
+  const selectedUsers = useMemo(
+    () => users.filter((u) => selected.has(u.uid)),
+    [users, selected],
+  );
+  const selectedWithSubmissions = useMemo(
+    () => selectedUsers.filter((u) => (countByRecruiter.get(u.uid) ?? 0) > 0),
+    [selectedUsers, countByRecruiter],
+  );
+
+  async function deleteSelected() {
+    const n = selectedUsers.length;
+    if (n === 0) return;
+
+    const attached = selectedWithSubmissions.reduce(
+      (sum, u) => sum + (countByRecruiter.get(u.uid) ?? 0),
+      0,
+    );
+
+    /* The warning that matters is not "this is permanent" — it is that some
+       of these people did real work. Named, not counted, when it is a handful:
+       recognising one name is what stops the wrong click. */
+    const withWork =
+      selectedWithSubmissions.length === 0
+        ? ""
+        : selectedWithSubmissions.length <= 3
+          ? ` ${selectedWithSubmissions
+              .map((u) => u.name || u.email)
+              .join(", ")} submitted ${attached} candidate${attached === 1 ? "" : "s"} between them — those submissions stay, but lose their recruiter.`
+          : ` ${selectedWithSubmissions.length} of them submitted ${attached} candidate${attached === 1 ? "" : "s"} between them — those submissions stay, but lose their recruiter.`;
+
+    if (
+      !(await confirm({
+        title: `Delete ${n} recruiter account${n === 1 ? "" : "s"}?`,
+        message: `The account, profile and anything only they had (saved candidates, their recruiter website, their leads) is removed.${withWork}`,
+        note: "This cannot be undone. Admin accounts and your own are skipped automatically.",
+        confirmLabel: `Delete ${n}`,
+        tone: "danger",
+      }))
+    ) {
+      return;
+    }
+
+    setDeleteError(null);
+    setDeleteResult(null);
+    setDeleting(true);
+    try {
+      const result = await deleteRecruiters(selectedUsers.map((u) => u.uid));
+      setDeleteResult(result);
+      // Drop the rows locally rather than refetching: the server has already
+      // told us exactly which ids went.
+      const gone = new Set(result.deletedUids);
+      setUsers((prev) => prev.filter((u) => !gone.has(u.uid)));
+      // Anything refused stays selected, so it is still in front of the admin
+      // with the reason showing.
+      setSelected(new Set(result.refused.map((r) => r.uid)));
+    } catch (err) {
+      setDeleteError(errorMessage(err, "Could not delete those accounts."));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div>
       {dialog}
@@ -275,6 +374,48 @@ function RecruitersList() {
         </div>
       )}
 
+      {deleteError && (
+        <div className="mb-4 rounded-xl border border-coral bg-coral-soft px-4 py-3 text-sm font-semibold text-coral">
+          {deleteError}
+        </div>
+      )}
+
+      {deleteResult && (
+        <div className="mb-4 rounded-xl border border-line bg-white px-4 py-3">
+          <p className="text-sm font-bold text-ink">
+            {deleteResult.deleted === 0
+              ? "Nothing was deleted."
+              : `Deleted ${deleteResult.deleted} account${deleteResult.deleted === 1 ? "" : "s"}.`}
+          </p>
+          {deleteResult.deleted > 0 && (
+            <p className="mt-1 text-xs text-muted">
+              {deleteResult.deletedNames.slice(0, 6).join(", ")}
+              {deleteResult.deletedNames.length > 6 &&
+                ` and ${deleteResult.deletedNames.length - 6} more`}
+              .
+              {deleteResult.submissionsDetached > 0 &&
+                ` ${deleteResult.submissionsDetached} submission${
+                  deleteResult.submissionsDetached === 1 ? " was" : "s were"
+                } kept and no longer show a recruiter.`}
+            </p>
+          )}
+          {deleteResult.notFound > 0 && (
+            <p className="mt-1 text-xs text-muted">
+              {deleteResult.notFound} had already been deleted.
+            </p>
+          )}
+          {deleteResult.refused.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {deleteResult.refused.map((r) => (
+                <li key={r.uid} className="text-xs font-semibold text-coral">
+                  Kept {r.name}: {r.reason}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       {users.length > 0 && (
         <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
           {STATUS_TABS.map((s) => {
@@ -336,6 +477,65 @@ function RecruitersList() {
         </div>
       ) : (
         <>
+          {/* Selection bar. Always present once there are rows, so the
+              checkboxes on the cards have something that explains them, and
+              it turns into the delete control the moment anything is ticked. */}
+          <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-line bg-white px-4 py-2.5">
+            <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink">
+              <input
+                type="checkbox"
+                checked={allPageSelected}
+                ref={(el) => {
+                  // Partial page selection reads as indeterminate rather than
+                  // as "none", so the box matches what is actually ticked.
+                  if (el) el.indeterminate = pageSelected > 0 && !allPageSelected;
+                }}
+                onChange={togglePage}
+                className="h-4 w-4 cursor-pointer accent-primary"
+              />
+              Select page
+            </label>
+
+            {shown.length > paginated.length && (
+              <button
+                type="button"
+                onClick={selectAllMatching}
+                className="text-xs font-semibold text-primary hover:underline"
+              >
+                Select all {shown.length} matching
+              </button>
+            )}
+
+            {selected.size > 0 ? (
+              <>
+                <span className="text-xs text-muted">
+                  {selected.size} selected
+                  {selectedWithSubmissions.length > 0 &&
+                    ` · ${selectedWithSubmissions.length} with submissions`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelected(new Set())}
+                  className="text-xs font-semibold text-muted hover:text-ink"
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={deleteSelected}
+                  disabled={deleting}
+                  className="ml-auto rounded-pill bg-coral px-4 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {deleting ? "Deleting…" : `Delete ${selected.size}`}
+                </button>
+              </>
+            ) : (
+              <span className="text-xs text-muted">
+                Tick accounts to delete them in bulk.
+              </span>
+            )}
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
             {paginated.map((u) => (
               <RecruiterCard
@@ -343,6 +543,8 @@ function RecruitersList() {
                 user={u}
                 submissions={countByRecruiter.get(u.uid) ?? 0}
                 joined={fmtDate(u)}
+                selected={selected.has(u.uid)}
+                onToggle={() => toggleOne(u.uid)}
               />
             ))}
           </div>
@@ -388,10 +590,14 @@ function RecruiterCard({
   user,
   submissions,
   joined,
+  selected,
+  onToggle,
 }: {
   user: UserProfile;
   submissions: number;
   joined: string;
+  selected: boolean;
+  onToggle: () => void;
 }) {
   const initial = (user.name || user.email || "R").charAt(0).toUpperCase();
   const completion = profileCompletion(user);
@@ -410,8 +616,22 @@ function RecruiterCard({
   const subtitle = user.headline || user.company || user.location || `Joined ${joined}`;
 
   return (
-    <div className="group relative flex flex-col rounded-xl border border-line bg-white p-4 transition-all hover:border-primary/30 hover:shadow-[0_2px_12px_rgba(23,19,15,0.06)]">
+    <div
+      className={`group relative flex flex-col rounded-xl border bg-white p-4 transition-all hover:shadow-[0_2px_12px_rgba(23,19,15,0.06)] ${
+        selected ? "border-coral ring-1 ring-coral" : "border-line hover:border-primary/30"
+      }`}
+    >
       <div className="flex items-start gap-3">
+        {/* z-10 because the name's link stretches an overlay across the whole
+            card; without it the tick target is under that overlay and
+            selecting a card would navigate to it instead. */}
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggle}
+          aria-label={`Select ${user.name || user.email}`}
+          className="relative z-10 mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-coral"
+        />
         <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-soft text-sm font-bold text-primary">
           {user.photoURL ? (
             // eslint-disable-next-line @next/next/no-img-element
