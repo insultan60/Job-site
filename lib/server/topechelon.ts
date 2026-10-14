@@ -2,12 +2,7 @@ import "server-only";
 import { query, execute } from "@/lib/db";
 import { createJob } from "@/lib/server/repo";
 import { feeTierForSalary } from "@/lib/feeTiers";
-import {
-  EMPLOYMENT_TYPE_MAP,
-  fetchJobIds,
-  fetchJobPosting,
-  mapWithConcurrency,
-} from "../../scripts/topechelon-scrape.mjs";
+import { fetchJobsFromFeed } from "../../scripts/topechelon-scrape.mjs";
 
 /* Imports Metro Associates' live postings from its Top Echelon careers portal
    into the `jobs` table. This is the DB-touching half; the scraping/parsing
@@ -33,14 +28,18 @@ export type TopEchelonSyncResult = {
   skipped: number;
   failed: number;
   closed: number;
+  /** Roles the close-out would have closed but didn't, because the set was
+      large enough to suggest a partial fetch. Normally 0. */
+  closeSkipped: number;
   addedJobs: { title: string; location: string; category: string }[];
   closedJobs: { title: string; location: string }[];
 };
 
 export async function runTopEchelonSync(
-  { publish = false }: { publish?: boolean } = {},
+  { publish = true }: { publish?: boolean } = {},
 ): Promise<TopEchelonSyncResult> {
-  const teIds: string[] = await fetchJobIds();
+  const feedJobs = await fetchJobsFromFeed();
+  const teIds: string[] = feedJobs.map((job) => job.teId);
 
   /* Guard the close-out step below. An empty list is never a legitimate
      "Metro has no open roles" signal — the portal has always listed dozens —
@@ -58,20 +57,17 @@ export async function runTopEchelonSync(
   );
   const existingIds = new Set(existingRows.map((r) => r.id));
 
-  const newIds = teIds.filter((teId) => !existingIds.has(`te-${teId}`));
-  const skipped = teIds.length - newIds.length;
-
-  const postings = await mapWithConcurrency(newIds, 5, fetchJobPosting);
+  /* The feed carries each role's description with the listing, so there is
+     nothing left to fetch per job: the new ones are simply the ones not
+     already stored. `failed` stays in the result for the callers and the
+     audit log, but with no per-role request left to fail it is always 0. */
+  const postings = feedJobs.filter((job) => !existingIds.has(`te-${job.teId}`));
+  const skipped = feedJobs.length - postings.length;
 
   const addedJobs: TopEchelonSyncResult["addedJobs"] = [];
-  let failed = 0;
+  const failed = 0;
 
-  for (let i = 0; i < newIds.length; i++) {
-    const job = postings[i];
-    if (!job) {
-      failed++;
-      continue;
-    }
+  for (const job of postings) {
     await createJob(
       {
         title: job.title,
@@ -79,7 +75,7 @@ export async function runTopEchelonSync(
         category: job.category,
         location: job.location,
         remote: false,
-        employmentType: EMPLOYMENT_TYPE_MAP["Direct Hire"],
+        employmentType: job.employmentType,
         salaryMin: null,
         salaryMax: null,
         bounty: null,
@@ -119,8 +115,32 @@ export async function runTopEchelonSync(
   );
   const gone = goneRows.filter((r) => !livePortalIds.has(r.id));
 
-  for (const row of gone) {
-    await execute(`UPDATE jobs SET status = 'closed' WHERE id = ?`, [row.id]);
+  /* Second guard on the close-out, for a fetch that came back short rather
+     than empty.
+
+     The length check at the top of this function catches a portal that
+     returned an error page. It does nothing for one that returned half its
+     roles because a request timed out, a page of results failed to render, or
+     the markup changed partway down the list. Every role missing from that
+     one run gets closed here.
+
+     Closing is a ratchet. The importer skips ids already in the table, so a
+     role closed by mistake is never reopened by a later sync, and a few short
+     fetches can quietly retire most of the board. Metro withdrawing a third
+     of its live roles between two syncs is not a thing that happens; a
+     partial fetch is, and the two are indistinguishable from in here.
+
+     So when the close set is implausibly large, assume the fetch and not the
+     portal, and close nothing. Imports still proceed. A genuine bulk
+     withdrawal just means an admin closes those by hand, which is the
+     recoverable direction to fail in. */
+  const closeShare = goneRows.length > 0 ? gone.length / goneRows.length : 0;
+  const closeLooksWrong = gone.length > 5 && closeShare > 0.3;
+
+  if (!closeLooksWrong) {
+    for (const row of gone) {
+      await execute(`UPDATE jobs SET status = 'closed' WHERE id = ?`, [row.id]);
+    }
   }
 
   return {
@@ -128,8 +148,11 @@ export async function runTopEchelonSync(
     added: addedJobs.length,
     skipped,
     failed,
-    closed: gone.length,
+    closed: closeLooksWrong ? 0 : gone.length,
+    closeSkipped: closeLooksWrong ? gone.length : 0,
     addedJobs,
-    closedJobs: gone.map((r) => ({ title: r.title, location: r.location })),
+    closedJobs: closeLooksWrong
+      ? []
+      : gone.map((r) => ({ title: r.title, location: r.location })),
   };
 }

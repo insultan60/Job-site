@@ -2,7 +2,7 @@
  * portal into JobFolder's `jobs` table.
  *
  *   node --env-file=.env.local scripts/scrape-topechelon-jobs.mjs
- *   node --env-file=.env.local scripts/scrape-topechelon-jobs.mjs --publish
+ *   node --env-file=.env.local scripts/scrape-topechelon-jobs.mjs --draft
  *
  * The scraping/parsing itself lives in scripts/topechelon-scrape.mjs, shared
  * with lib/server/topechelon.ts — the same logic backs the admin console's
@@ -14,21 +14,17 @@
  * never overwritten. That also means an admin's edits to an imported job
  * (category, status, added salary, etc.) survive future re-runs.
  *
- * New jobs land as status='draft' by default — same as a job an admin
- * creates by hand (see readJobWrite in app/api/admin/jobWrite.ts) — so
- * nothing scraped goes live on the public board without a human looking at
- * it first. Pass --publish to import as 'open' instead, once you trust the
- * mapping enough to skip that review step.
+ * New jobs land as status='open' and are on the board as soon as this
+ * finishes. They imported as drafts until Oct 2026; the client asked for
+ * imported roles to go straight on. Pass --draft for the old review-queue
+ * behaviour, matching a job an admin creates by hand (see readJobWrite in
+ * app/api/admin/jobWrite.ts).
  */
 
 import mysql from "mysql2/promise";
-import {
-  EMPLOYMENT_TYPE_MAP,
-  fetchJobIds,
-  fetchJobPosting,
-} from "./topechelon-scrape.mjs";
+import { fetchJobsFromFeed } from "./topechelon-scrape.mjs";
 
-const PUBLISH = process.argv.includes("--publish");
+const PUBLISH = !process.argv.includes("--draft");
 
 async function main() {
   const conn = await mysql.createConnection({
@@ -42,9 +38,10 @@ async function main() {
   });
 
   try {
-    console.log("Fetching Top Echelon portal listing...");
-    const teIds = await fetchJobIds();
-    console.log(`Found ${teIds.length} postings on the portal.`);
+    console.log("Fetching Top Echelon careers feed...");
+    const feedJobs = await fetchJobsFromFeed();
+    const teIds = feedJobs.map((job) => job.teId);
+    console.log(`Found ${teIds.length} postings in the feed.`);
 
     /* Same guard as lib/server/topechelon.ts: an empty list means the fetch
        failed, not that Metro has no roles — never close the whole board on
@@ -64,17 +61,10 @@ async function main() {
     let skipped = 0;
     let failed = 0;
 
-    for (const teId of teIds) {
-      const id = `te-${teId}`;
+    for (const job of feedJobs) {
+      const id = `te-${job.teId}`;
       if (existingIds.has(id)) {
         skipped++;
-        continue;
-      }
-
-      const job = await fetchJobPosting(teId);
-      if (!job) {
-        console.warn(`  skip ${teId}: fetch or parse failed`);
-        failed++;
         continue;
       }
 
@@ -87,7 +77,7 @@ async function main() {
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           id, job.title, job.company, job.category, job.location,
-          false, EMPLOYMENT_TYPE_MAP["Direct Hire"],
+          false, job.employmentType,
           // salary_min, salary_max, bounty, then fee_tier: 'general' is
           // what feeTierForSalary(null, null) returns in lib/feeTiers.ts.
           // Duplicated as a literal because this is a plain .mjs script and
@@ -109,14 +99,31 @@ async function main() {
       `SELECT id, title, location FROM jobs WHERE id LIKE 'te-%' AND status <> 'closed'`,
     );
     const gone = openRows.filter((r) => !live.has(r.id));
-    for (const row of gone) {
-      await conn.execute(`UPDATE jobs SET status = 'closed' WHERE id = ?`, [row.id]);
-      console.log(`  - ${row.title} — ${row.location} (gone from portal, closed)`);
+
+    /* Same partial-fetch guard as lib/server/topechelon.ts, and for the same
+       reason: the length check above only catches a portal that returned
+       nothing, and closing is a one-way ratchet because the importer never
+       revisits an id it has already stored. Keep the two in step. */
+    const closeShare = openRows.length > 0 ? gone.length / openRows.length : 0;
+    const closeLooksWrong = gone.length > 5 && closeShare > 0.3;
+
+    if (closeLooksWrong) {
+      console.warn(
+        `\n! ${gone.length} of ${openRows.length} imported roles are missing from this fetch.` +
+        `\n  That is too many to be a genuine withdrawal, so nothing was closed.` +
+        `\n  Re-run, and if the number holds, close them from the admin console.`,
+      );
+    } else {
+      for (const row of gone) {
+        await conn.execute(`UPDATE jobs SET status = 'closed' WHERE id = ?`, [row.id]);
+        console.log(`  - ${row.title} — ${row.location} (gone from portal, closed)`);
+      }
     }
 
     console.log(
-      `\nDone. ${added} added, ${skipped} already imported, ${gone.length} closed, ${failed} failed.` +
-      (added > 0 && !PUBLISH ? "\nNew jobs are drafts — review and publish them from the admin console." : ""),
+      `\nDone. ${added} added, ${skipped} already imported, ` +
+      `${closeLooksWrong ? 0 : gone.length} closed, ${failed} failed.` +
+      (added > 0 && !PUBLISH ? "\nNew jobs are drafts. Review and publish them from the admin console." : ""),
     );
   } finally {
     await conn.end();

@@ -16,6 +16,11 @@ export const PORTAL_URL = "https://jobs.metroassoc.com/portals/3a7f6fd3-7cf7-447
 // Checked in order — first match wins. Built from the actual job titles on
 // Metro's portal; extend this if a future title doesn't match anything and
 // falls through to "Other".
+/* Annotated because this file is plain .mjs: without it the tuples infer as
+   (RegExp | string)[], guessCategory's return widens to string | RegExp, and
+   the TypeScript callers fail to compile on a category that is only ever a
+   string. */
+/** @type {[RegExp, string][]} */
 export const CATEGORY_RULES = [
   // A resident engineer runs construction oversight on site — inspection
   // work under a different title, and the portal uses both.
@@ -66,6 +71,88 @@ export function htmlToText(html) {
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+/* Top Echelon's "Careers Page XML Feed" for the same portal.
+ *
+ * The portal id here (98b4920e...) differs from PORTAL_URL's (3a7f6fd3...).
+ * Both are aliases for the same portal and a job id resolves under either;
+ * the feed is only published against this one.
+ *
+ * Public, not a secret: fetched unauthenticated, and the ATS prints it in the
+ * admin UI for pasting into a website. */
+export const FEED_URL =
+  "https://bb3api.topechelon.com/api/v1/cp_xml_feed/98b4920e-874e-4ce2-b4d8-d7e203321579";
+
+/** One field out of a <job> block. Top Echelon CDATA-wraps the free-text
+ *  fields (positiontitle, description, city) and leaves the short controlled
+ *  ones bare (state, country, dateposted, the type flags), so both shapes
+ *  have to be handled. A regex that assumes CDATA silently returns nothing
+ *  for half the fields. */
+function field(block, tag) {
+  const m = block.match(
+    new RegExp(`<${tag}>(?:<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>|([\\s\\S]*?))</${tag}>`),
+  );
+  return (m?.[1] ?? m?.[2] ?? "").trim();
+}
+
+/** The feed carries three Yes/No flags rather than a type string. Direct hire
+ *  is overwhelmingly what Metro posts, and is what every imported role was
+ *  hardcoded to before, so it stays the fallback. */
+function employmentTypeFromFlags(block) {
+  if (field(block, "contract") === "Yes") return EMPLOYMENT_TYPE_MAP.Contract;
+  if (field(block, "temptoperm") === "Yes") return EMPLOYMENT_TYPE_MAP.Temporary;
+  return EMPLOYMENT_TYPE_MAP["Direct Hire"];
+}
+
+/* Reads every live role in one request.
+ *
+ * WHY THE FEED AND NOT THE PORTAL HTML
+ *
+ * fetchJobIds below scrapes PORTAL_URL for job ids, then fetchJobPosting
+ * fetches each role's page and parses its JSON-LD: one request to list, one
+ * per role, about forty in all. Both halves depend on a third party's markup.
+ * The listing regex pulls ids out of hrefs, so a portal that renders
+ * partially, paginates, or restyles returns a short list rather than an
+ * error, and the caller's close-out step reads "short list" as "these roles
+ * were withdrawn" and closes them. That is the likeliest explanation for a
+ * board carrying more closed roles than the portal has live ones.
+ *
+ * The feed publishes title, description, city, state, country, posting date,
+ * job id and type flags as named fields, which is what it exists for. One
+ * request, no per-role fetches, and nothing that depends on how the portal
+ * looks. The jobid is the same UUID the portal uses, so ids already stored as
+ * `te-<uuid>` still match and nothing re-imports as a duplicate.
+ *
+ * A short feed is still possible in principle, which is why the callers keep
+ * their guards on the close-out rather than trusting this.
+ */
+export async function fetchJobsFromFeed() {
+  const res = await fetch(FEED_URL);
+  if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
+  const xml = await res.text();
+
+  return [...xml.matchAll(/<job>([\s\S]*?)<\/job>/g)]
+    .map((m) => m[1])
+    .map((block) => {
+      const title = field(block, "positiontitle") || "Untitled role";
+      const city = field(block, "city");
+      const state = field(block, "state");
+      return {
+        teId: field(block, "jobid"),
+        title,
+        /* Deliberately not the feed's publisher name — see CONFIDENTIAL_CLIENT
+           above for why imported roles don't carry the agency's branding. */
+        company: CONFIDENTIAL_CLIENT,
+        category: guessCategory(title),
+        location: [city, state].filter(Boolean).join(", "),
+        description: htmlToText(field(block, "description")),
+        employmentType: employmentTypeFromFlags(block),
+      };
+    })
+    /* A block with no jobid can't be stored under a stable id, so it would
+       re-import as a new row on every run. Drop it rather than churn. */
+    .filter((job) => job.teId);
 }
 
 export async function fetchJobIds() {
