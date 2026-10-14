@@ -4,11 +4,11 @@ import { createJob } from "@/lib/server/repo";
 import { feeTierForSalary } from "@/lib/feeTiers";
 import { fetchJobsFromFeed } from "../../scripts/topechelon-scrape.mjs";
 
-/* Imports Metro Associates' live postings from its Top Echelon careers portal
-   into the `jobs` table. This is the DB-touching half; the scraping/parsing
+/* Imports Metro Associates' live postings from its Top Echelon careers feed
+   into the `jobs` table. This is the DB-touching half; the fetching/parsing
    itself lives in scripts/topechelon-scrape.mjs, shared with the CLI script
    (scripts/scrape-topechelon-jobs.mjs, for manual/scheduled runs) so a fix to
-   category rules or JSON-LD parsing doesn't have to be made twice.
+   category rules or feed parsing doesn't have to be made twice.
 
    Called from app/api/admin/jobs/sync-topechelon/route.ts — the admin
    console's "Sync Top Echelon" button.
@@ -18,9 +18,10 @@ import { fetchJobsFromFeed } from "../../scripts/topechelon-scrape.mjs";
    overwritten. That also means an admin's edits to an imported job (category,
    status, added salary, etc.) survive future re-runs.
 
-   New jobs land as status='draft' by default — same as a job an admin creates
-   by hand — so nothing scraped goes live on the public board without a human
-   looking at it first. */
+   New jobs land as status='open'. They imported as drafts until Oct 2026, so
+   that nothing imported reached the public board without a human reading it
+   first; the client asked for roles to go straight on. Pass
+   { publish: false } to put the review step back. */
 
 export type TopEchelonSyncResult = {
   found: number;
