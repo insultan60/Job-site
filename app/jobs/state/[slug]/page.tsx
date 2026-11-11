@@ -2,34 +2,21 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { cache } from "react";
 import { listOpenJobs } from "@/lib/server/repo";
-import { categoryFacets, jobsInState, stateFacets, stateOf, titleFromSlug } from "@/lib/jobTaxonomy";
+import { categoryFacets, jobsInState, stateOf, titleFromSlug } from "@/lib/jobTaxonomy";
 import { LandingJobList, FacetLinks } from "@/components/jobs/LandingJobList";
 import { SITE_NAME, SITE_URL, absoluteUrl } from "@/lib/seo";
+import { getJobState, jobStates } from "@/lib/jobStates";
+import { Navbar } from "@/components/Navbar";
+import { Footer } from "@/components/Footer";
+import { Container } from "@/components/ui";
 
-/* One indexable page per state, for the "<discipline> jobs <state>" search
-   that /jobs alone can never rank for. Same reasoning as the category pages
-   next door — see the note there. */
 export const revalidate = 3600;
-
-/* Only slugs built from live data are routable; anything else is a real 404.
- *
- * This matters more than it looks. With dynamicParams left on, an unknown
- * slug renders and calls notFound() — but under ISR that response gets
- * cached and served with HTTP 200, i.e. a soft 404. Google treats those as
- * thin duplicates and they quietly eat crawl budget. Switching it off makes
- * the router reject unknown slugs before any of this runs.
- *
- * The trade-off: a discipline or state that gains its first role won't have
- * a page until the next deploy. Its roles are still on /jobs and on the
- * other axis's page, so nothing is hidden — and a deploy follows any sync
- * worth publishing. */
 export const dynamicParams = false;
 
 const loadJobs = cache(() => listOpenJobs());
 
-export async function generateStaticParams() {
-  const jobs = await loadJobs().catch(() => []);
-  return stateFacets(jobs).map((f) => ({ slug: f.slug }));
+export function generateStaticParams() {
+  return jobStates.map((state) => ({ slug: state.slug }));
 }
 
 export async function generateMetadata({
@@ -40,19 +27,16 @@ export async function generateMetadata({
   const { slug } = await params;
   const jobs = await loadJobs().catch(() => []);
   const matching = jobsInState(jobs, slug);
-  const name = (matching[0] && stateOf(matching[0].location)) || titleFromSlug(slug);
-
-  // Same reasoning as the category page's title.
-  const title = `Engineering Jobs in ${name} — ${matching.length} Open Role${matching.length === 1 ? "" : "s"} | JobFolder`;
-  const description = `${matching.length} open engineering, DOT and infrastructure role${matching.length === 1 ? "" : "s"} in ${name} on ${SITE_NAME}. Every posting shows the recruiter fee it pays on a confirmed hire.`;
+  const state = getJobState(slug);
+  const name = state?.name || (matching[0] && stateOf(matching[0].location)) || titleFromSlug(slug);
+  const title = `Engineering Jobs in ${name} - ${matching.length} Open Role${matching.length === 1 ? "" : "s"}`;
+  const description = `${matching.length} open engineering, DOT and infrastructure role${matching.length === 1 ? "" : "s"} in ${name} on ${SITE_NAME}. Browse current openings and local market context.`;
 
   return {
     title,
     description,
     alternates: { canonical: absoluteUrl(`/jobs/state/${slug}`) },
     openGraph: { title, description, url: absoluteUrl(`/jobs/state/${slug}`) },
-    // See the note on the category page: built, but currently empty.
-    ...(matching.length === 0 ? { robots: { index: false, follow: true } } : {}),
   };
 }
 
@@ -62,83 +46,120 @@ export default async function StateJobsPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const jobs = await loadJobs();
-  const states = stateFacets(jobs);
+  const jobs = await loadJobs().catch(() => []);
   const matching = jobsInState(jobs, slug);
-  const facet = {
-    name: (matching[0] && stateOf(matching[0].location)) || titleFromSlug(slug),
-    count: matching.length,
+  const state = getJobState(slug);
+  const name = state?.name || (matching[0] && stateOf(matching[0].location)) || titleFromSlug(slug);
+  const localCategories = categoryFacets(matching);
+  const collectionSchema = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: `Engineering Jobs in ${name}`,
+    url: `${SITE_URL}/jobs/state/${slug}`,
+    mainEntity: {
+      "@type": "ItemList",
+      numberOfItems: matching.length,
+      itemListElement: matching.map((job, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        url: `${SITE_URL}/jobs/${encodeURIComponent(job.id)}`,
+        name: job.title,
+      })),
+    },
   };
 
-  /* Which disciplines are actually hiring in this state — the most useful
-     thing on the page after the roles themselves, and it keeps each state
-     page distinct from the others rather than boilerplate with a name
-     swapped in. */
-  const localCategories = categoryFacets(matching);
-
   return (
-    <main className="mx-auto max-w-4xl px-6 py-14">
-      <nav className="text-xs font-semibold text-muted" aria-label="Breadcrumb">
-        <Link href="/jobs" className="hover:text-primary">All jobs</Link>
-        <span className="mx-1.5 opacity-50">/</span>
-        <span className="text-ink">{facet.name}</span>
-      </nav>
+    <>
+      <Navbar />
+      <main className="flex-1 bg-white">
+        <section className="py-8 lg:py-10">
+          <Container>
+            <nav className="text-sm font-semibold text-muted" aria-label="Breadcrumb">
+              <Link href="/jobs" className="hover:text-primary">All jobs</Link>
+              <span className="mx-1.5 opacity-50">/</span>
+              <Link href="/jobs/state" className="hover:text-primary">States</Link>
+              <span className="mx-1.5 opacity-50">/</span>
+              <span className="text-ink">{name}</span>
+            </nav>
+            <span className="mt-5 block text-xs font-bold uppercase tracking-wider text-muted">
+              Open roles in {state?.region ?? "this market"}
+            </span>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">
+              Engineering Jobs in {name}
+            </h1>
+            <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-muted">
+              {matching.length} open engineering, DOT and infrastructure {matching.length === 1 ? "role" : "roles"} in {name}
+              {localCategories.length > 0 && (
+                <>
+                  {" - currently hiring across "}
+                  {localCategories.slice(0, 4).map((category, index, list) => (
+                    <span key={category.slug}>
+                      {category.name.toLowerCase()}
+                      {index < list.length - 2 ? ", " : index === list.length - 2 ? " and " : ""}
+                    </span>
+                  ))}
+                </>
+              )}
+              .
+            </p>
+          </Container>
+        </section>
 
-      <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
-        Engineering Jobs in {facet.name}
-      </h1>
-      <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted">
-        {facet.count} open engineering, DOT and infrastructure{" "}
-        {facet.count === 1 ? "role" : "roles"} in {facet.name} on {SITE_NAME}
-        {localCategories.length > 0 && (
-          <>
-            {" "}— currently hiring across{" "}
-            {localCategories.slice(0, 4).map((c, i, arr) => (
-              <span key={c.slug}>
-                {c.name.toLowerCase()}
-                {i < arr.length - 2 ? ", " : i === arr.length - 2 ? " and " : ""}
-              </span>
-            ))}
-          </>
-        )}
-        . Every posting shows the fee it pays a recruiter on a confirmed hire.
-      </p>
+        <section className="pb-16 sm:pb-20">
+          <Container className="max-w-4xl">
+            {state && (
+              <section className="rounded-2xl border border-line bg-white p-6">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted">State hiring context</p>
+                <h2 className="mt-2 text-lg font-bold text-ink">{state.name} engineering market</h2>
+                <p className="mt-3 text-sm leading-relaxed text-muted">
+                  {state.name} is a major {state.region.toLowerCase()} market for {state.focus}.
+                </p>
+                <p className="mt-3 text-sm leading-relaxed text-muted">{state.hiringNote}</p>
+              </section>
+            )}
 
-      <LandingJobList jobs={matching} />
+            <section className="mt-10">
+              <div className="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted">Live opportunities</p>
+                  <h2 className="mt-1 text-lg font-bold text-ink">Current roles in {name}</h2>
+                </div>
+                <Link href="/jobs" className="text-sm font-bold text-primary hover:text-primary-dark">
+                  Browse all jobs -&gt;
+                </Link>
+              </div>
 
-      <FacetLinks
-        title="Other states"
-        basePath="/jobs/state"
-        facets={states}
-        activeSlug={slug}
-      />
-      <FacetLinks
-        title="Browse by discipline"
-        basePath="/jobs/category"
-        facets={categoryFacets(jobs)}
-      />
+              {matching.length > 0 ? (
+                <LandingJobList jobs={matching} />
+              ) : (
+                <div className="mt-6 rounded-2xl border border-line bg-gray-50 p-7">
+                  <p className="font-bold text-ink">No open roles are listed in {name} right now.</p>
+                  <p className="mt-2 max-w-xl leading-relaxed text-muted">
+                    Openings change regularly. Browse all current roles or return soon to see new opportunities in this market.
+                  </p>
+                </div>
+              )}
+            </section>
 
+            <FacetLinks
+              title="Explore other states"
+              basePath="/jobs/state"
+              facets={jobStates.map((item) => ({
+                name: item.name,
+                slug: item.slug,
+                count: jobsInState(jobs, item.slug).length,
+              }))}
+              activeSlug={slug}
+            />
+            <FacetLinks title="Browse by discipline" basePath="/jobs/category" facets={categoryFacets(jobs)} />
+          </Container>
+        </section>
+      </main>
+      <Footer />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "CollectionPage",
-            name: `Engineering Jobs in ${facet.name}`,
-            url: `${SITE_URL}/jobs/state/${slug}`,
-            mainEntity: {
-              "@type": "ItemList",
-              numberOfItems: matching.length,
-              itemListElement: matching.map((job, i) => ({
-                "@type": "ListItem",
-                position: i + 1,
-                url: `${SITE_URL}/jobs/${encodeURIComponent(job.id)}`,
-                name: job.title,
-              })),
-            },
-          }),
-        }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionSchema) }}
       />
-    </main>
+    </>
   );
 }
