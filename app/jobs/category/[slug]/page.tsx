@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { cache } from "react";
 import { listOpenJobs } from "@/lib/server/repo";
-import { categoryFacets, jobsInCategory, stateFacets, titleFromSlug } from "@/lib/jobTaxonomy";
+import { categoryFacets, jobsInCategory, jobsInState, titleFromSlug } from "@/lib/jobTaxonomy";
 import { LandingJobList, FacetLinks } from "@/components/jobs/LandingJobList";
 import { SITE_NAME, SITE_URL, absoluteUrl } from "@/lib/seo";
+import { jobStates } from "@/lib/jobStates";
 
 /* One indexable page per engineering discipline.
  *
@@ -111,7 +112,15 @@ export default async function CategoryJobsPage({
         facets={categories}
         activeSlug={slug}
       />
-      <FacetLinks title="Browse by state" basePath="/jobs/state" facets={stateFacets(jobs)} />
+      <FacetLinks
+        title="Browse by state"
+        basePath="/jobs/state"
+        facets={jobStates.map((state) => ({
+          name: state.name,
+          slug: state.slug,
+          count: jobsInState(jobs, state.slug).length,
+        }))}
+      />
 
       {/* ItemList rather than JobPosting: the individual roles carry their own
           JobPosting markup at /jobs/[id], and duplicating it here would offer

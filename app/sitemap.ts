@@ -2,8 +2,10 @@ import type { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/seo";
 import { howSteps } from "@/lib/howItWorks";
 import { guides } from "@/lib/hiringGuides";
+import { jobMarkets } from "@/lib/jobMarkets";
+import { jobStates } from "@/lib/jobStates";
 import { listOpenJobs } from "@/lib/server/repo";
-import { categoryFacets, stateFacets } from "@/lib/jobTaxonomy";
+import { categoryFacets } from "@/lib/jobTaxonomy";
 
 /* Regenerate hourly so newly posted roles reach the sitemap without a redeploy. */
 export const revalidate = 3600;
@@ -15,6 +17,7 @@ const staticRoutes: { path: string; priority: number; freq: Entry["changeFrequen
   { path: "/jobs", priority: 0.9, freq: "daily" },
   { path: "/jobs/category", priority: 0.8, freq: "daily" },
   { path: "/jobs/state", priority: 0.8, freq: "daily" },
+  { path: "/jobs/city", priority: 0.8, freq: "weekly" },
   { path: "/how-it-works", priority: 0.8, freq: "monthly" },
   { path: "/recruiters", priority: 0.8, freq: "monthly" },
   { path: "/hiring-guides", priority: 0.7, freq: "monthly" },
@@ -56,6 +59,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
+  for (const market of jobMarkets) {
+    entries.push({
+      url: `${SITE_URL}/jobs/city/${market.slug}`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.65,
+    });
+  }
+
+  for (const state of jobStates) {
+    entries.push({
+      url: `${SITE_URL}/jobs/state/${state.slug}`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.7,
+    });
+  }
+
   /* Open roles are the highest-churn URLs on the site, and the landing pages
      are derived from the same read. A database outage must never fail the
      build, so the whole block is best-effort: static routes alone still make
@@ -88,14 +109,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       });
     }
 
-    for (const facet of stateFacets(jobs)) {
-      entries.push({
-        url: `${SITE_URL}/jobs/state/${facet.slug}`,
-        lastModified: now,
-        changeFrequency: "daily",
-        priority: 0.7,
-      });
-    }
   } catch {
     // Static routes alone still make a valid sitemap.
   }
