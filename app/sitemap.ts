@@ -3,7 +3,6 @@ import { SITE_URL } from "@/lib/seo";
 import { howSteps } from "@/lib/howItWorks";
 import { guides } from "@/lib/hiringGuides";
 import { jobMarkets } from "@/lib/jobMarkets";
-import { jobStates } from "@/lib/jobStates";
 import { listOpenJobs } from "@/lib/server/repo";
 import { categoryFacets } from "@/lib/jobTaxonomy";
 
@@ -65,15 +64,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: now,
       changeFrequency: "weekly",
       priority: 0.65,
-    });
-  }
-
-  for (const state of jobStates) {
-    entries.push({
-      url: `${SITE_URL}/jobs/state/${state.slug}`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.7,
     });
   }
 

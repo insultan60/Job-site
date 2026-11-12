@@ -77,9 +77,13 @@ export function jobsInCategory(jobs: Job[], slug: string): Job[] {
 }
 
 export function jobsInState(jobs: Job[], slug: string): Job[] {
+  /* Washington, DC is its own location route. Job locations may store it
+     either as the postal abbreviation or its full jurisdiction name. */
+  const locationSlugs = slug === "washington-dc" ? ["dc", "district-of-columbia"] : [slug];
+
   return jobs.filter((j) => {
     const state = stateOf(j.location);
-    return state !== null && slugify(state) === slug;
+    return state !== null && locationSlugs.includes(slugify(state));
   });
 }
 
