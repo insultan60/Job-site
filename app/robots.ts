@@ -12,7 +12,10 @@ export default function robots(): MetadataRoute.Robots {
          It is excluded via `robots: noindex` in its own layout instead. */
       disallow: ["/dashboard", "/login", "/signup"],
     },
-    sitemap: `${SITE_URL}/sitemap.xml`,
+    sitemap: [
+      `${SITE_URL}/sitemap.xml`,
+      `${SITE_URL}/state-sitemap.xml`,
+    ],
     host: SITE_URL,
   };
 }
