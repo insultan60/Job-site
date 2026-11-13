@@ -7,6 +7,7 @@ import { categoryFacets, jobsInState, stateOf, titleFromSlug } from "@/lib/jobTa
 import { LandingJobList, FacetLinks } from "@/components/jobs/LandingJobList";
 import { SITE_NAME, absoluteUrl } from "@/lib/seo";
 import { getJobState, jobStates } from "@/lib/jobStates";
+import { getStateGuide } from "@/lib/stateGuides";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Container } from "@/components/ui";
@@ -31,8 +32,12 @@ export async function generateMetadata({
   const matching = jobsInState(jobs, slug);
   const state = getJobState(slug);
   const name = state?.name || (matching[0] && stateOf(matching[0].location)) || titleFromSlug(slug);
-  const title = `Engineering Jobs in ${name} - ${matching.length} Open Role${matching.length === 1 ? "" : "s"}`;
-  const description = `${matching.length} open engineering, DOT and infrastructure role${matching.length === 1 ? "" : "s"} in ${name} on ${SITE_NAME}.`;
+  const title = matching.length > 0
+    ? `Engineering Jobs in ${name} - ${matching.length} Open Role${matching.length === 1 ? "" : "s"}`
+    : `Engineering Jobs and Infrastructure Resources in ${name}`;
+  const description = matching.length > 0
+    ? `${matching.length} open engineering, DOT and infrastructure role${matching.length === 1 ? "" : "s"} in ${name} on ${SITE_NAME}.`
+    : `Engineering job listings and official infrastructure resources for ${name} on ${SITE_NAME}.`;
 
   return {
     title,
@@ -52,6 +57,7 @@ export default async function StateJobsPage({
   const matching = jobsInState(jobs, slug);
   const state = getJobState(slug);
   const name = state?.name || (matching[0] && stateOf(matching[0].location)) || titleFromSlug(slug);
+  const guide = getStateGuide(slug);
   const categories = categoryFacets(matching);
   const stateFacets = jobStates.map((item) => ({
     name: item.name,
@@ -73,6 +79,16 @@ export default async function StateJobsPage({
         name: job.title,
       })),
     },
+  };
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: absoluteUrl("/") },
+      { "@type": "ListItem", position: 2, name: "Jobs", item: absoluteUrl("/jobs") },
+      { "@type": "ListItem", position: 3, name: "Jobs by state", item: absoluteUrl("/jobs/state") },
+      { "@type": "ListItem", position: 4, name, item: absoluteUrl(`/jobs/state/${slug}`) },
+    ],
   };
 
   return (
@@ -134,6 +150,44 @@ export default async function StateJobsPage({
             </div>
           </Container>
         </section>
+
+        {guide && (
+          <section className="border-b border-line bg-slate-50/70 py-12 sm:py-16">
+            <Container>
+              <div className="relative overflow-hidden rounded-3xl border border-line bg-white p-6 shadow-[0_20px_45px_-38px_rgba(23,19,15,0.45)] sm:p-9">
+                <div aria-hidden className="absolute right-0 top-0 h-44 w-44 -translate-y-1/2 translate-x-1/2 rounded-full bg-primary/5 blur-2xl" />
+                <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start">
+                  <div className="max-w-3xl">
+                    <p className="text-xs font-bold uppercase tracking-wider text-primary">Local market</p>
+                    <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">
+                      Engineering work in <span className="text-primary">{name}</span>
+                    </h2>
+                    <p className="mt-4 text-base leading-relaxed text-muted">{guide.summary}</p>
+                    <div className="mt-7 divide-y divide-line border-y border-line">
+                    {guide.sections.map((section) => (
+                      <article key={section.title} className="grid gap-2 py-5 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-6">
+                        <h3 className="border-l-2 border-primary pl-3 text-sm font-bold text-ink">{section.title}</h3>
+                        <p className="text-sm leading-relaxed text-muted">{section.body}</p>
+                      </article>
+                    ))}
+                    </div>
+                  </div>
+                  <aside className="relative overflow-hidden rounded-2xl bg-blue-brand-dark p-6 text-white">
+                    <div aria-hidden className="absolute -right-10 -top-10 h-28 w-28 rounded-full border border-white/10" />
+                    <p className="relative text-xs font-bold uppercase tracking-wider text-blue-100">Find your next role</p>
+                    <p className="relative mt-3 text-lg font-bold leading-snug">Browse current engineering opportunities across the United States.</p>
+                    <Link
+                      href="/jobs"
+                      className="relative mt-6 inline-flex rounded-pill bg-amber-400 px-4 py-2.5 text-sm font-bold text-blue-brand-dark transition-colors hover:bg-amber-300"
+                    >
+                      Browse all jobs
+                    </Link>
+                  </aside>
+                </div>
+              </div>
+            </Container>
+          </section>
+        )}
 
         <section className="bg-slate-50/60 py-10 sm:py-14">
           <Container>
@@ -211,7 +265,7 @@ export default async function StateJobsPage({
       <Footer />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionSchema) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify([collectionSchema, breadcrumbSchema]).replace(/</g, "\\u003c") }}
       />
     </>
   );
