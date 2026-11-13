@@ -39,7 +39,6 @@ export async function generateMetadata({
     description,
     alternates: { canonical: absoluteUrl(`/jobs/state/${slug}`) },
     openGraph: { title, description, url: absoluteUrl(`/jobs/state/${slug}`) },
-    ...(matching.length === 0 ? { robots: { index: false, follow: true } } : {}),
   };
 }
 
