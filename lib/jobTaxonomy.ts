@@ -79,13 +79,30 @@ export function jobsInCategory(jobs: Job[], slug: string): Job[] {
 export function jobsInState(jobs: Job[], slug: string): Job[] {
   /* Washington, DC is its own location route. Job locations may store it
      either as the postal abbreviation or its full jurisdiction name. */
-  const locationSlugs = slug === "washington-dc" ? ["dc", "district-of-columbia"] : [slug];
+  const locationSlugs = slug === "washington-dc"
+    ? ["dc", "district-of-columbia"]
+    : [slug, STATE_ABBREVIATIONS[slug]].filter((value): value is string => Boolean(value));
 
   return jobs.filter((j) => {
     const state = stateOf(j.location);
     return state !== null && locationSlugs.includes(slugify(state));
   });
 }
+
+/* The job feed contains both full state names ("Alabama") and USPS
+   abbreviations ("AL"). State landing pages must count both formats. */
+const STATE_ABBREVIATIONS: Record<string, string> = {
+  alabama: "al", alaska: "ak", arizona: "az", arkansas: "ar", california: "ca",
+  colorado: "co", connecticut: "ct", delaware: "de", florida: "fl", georgia: "ga",
+  hawaii: "hi", idaho: "id", illinois: "il", indiana: "in", iowa: "ia",
+  kansas: "ks", kentucky: "ky", louisiana: "la", maine: "me", maryland: "md",
+  massachusetts: "ma", michigan: "mi", minnesota: "mn", mississippi: "ms", missouri: "mo",
+  montana: "mt", nebraska: "ne", nevada: "nv", "new-hampshire": "nh", "new-jersey": "nj",
+  "new-mexico": "nm", "new-york": "ny", "north-carolina": "nc", "north-dakota": "nd", ohio: "oh",
+  oklahoma: "ok", oregon: "or", pennsylvania: "pa", "rhode-island": "ri", "south-carolina": "sc",
+  "south-dakota": "sd", tennessee: "tn", texas: "tx", utah: "ut", vermont: "vt",
+  virginia: "va", washington: "wa", "west-virginia": "wv", wisconsin: "wi", wyoming: "wy",
+};
 
 /** Reverses slugify well enough for a fallback heading — used only on a page
     whose roles have all closed, which is noindexed anyway. Won't restore
