@@ -151,7 +151,7 @@ export default async function StateJobsPage({
           </Container>
         </section>
 
-        {guide && (
+        {matching.length === 0 && guide && (
           <section className="border-b border-line bg-slate-50/70 py-12 sm:py-16">
             <Container>
               <div className="relative overflow-hidden rounded-3xl border border-line bg-white p-6 shadow-[0_20px_45px_-38px_rgba(23,19,15,0.45)] sm:p-9">
