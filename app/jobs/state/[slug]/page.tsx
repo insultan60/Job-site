@@ -32,10 +32,15 @@ export async function generateMetadata({
   const matching = jobsInState(jobs, slug);
   const state = getJobState(slug);
   const name = state?.name || (matching[0] && stateOf(matching[0].location)) || titleFromSlug(slug);
-  const title = matching.length > 0
+  const isSouthCarolinaMarketPage = slug === "south-carolina" && matching.length === 0;
+  const title = isSouthCarolinaMarketPage
+    ? `Engineering Market and Infrastructure in ${name}`
+    : matching.length > 0
     ? `Engineering Jobs in ${name} - ${matching.length} Open Role${matching.length === 1 ? "" : "s"}`
     : `Engineering Jobs and Infrastructure Resources in ${name}`;
-  const description = matching.length > 0
+  const description = isSouthCarolinaMarketPage
+    ? `An overview of ${name}'s transportation systems, infrastructure programs and engineering work on ${SITE_NAME}.`
+    : matching.length > 0
     ? `${matching.length} open engineering, DOT and infrastructure role${matching.length === 1 ? "" : "s"} in ${name} on ${SITE_NAME}.`
     : `Engineering job listings and official infrastructure resources for ${name} on ${SITE_NAME}.`;
 
@@ -58,13 +63,20 @@ export default async function StateJobsPage({
   const state = getJobState(slug);
   const name = state?.name || (matching[0] && stateOf(matching[0].location)) || titleFromSlug(slug);
   const guide = getStateGuide(slug);
+  const isSouthCarolinaMarketPage = slug === "south-carolina" && matching.length === 0 && Boolean(guide);
   const categories = categoryFacets(matching);
   const stateFacets = jobStates.map((item) => ({
     name: item.name,
     slug: item.slug,
     count: jobsInState(jobs, item.slug).length,
   }));
-  const collectionSchema = {
+  const pageSchema = isSouthCarolinaMarketPage ? {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: `Engineering Market and Infrastructure in ${name}`,
+    description: `An overview of ${name}'s transportation systems, infrastructure programs and engineering work.`,
+    url: absoluteUrl(`/jobs/state/${slug}`),
+  } : {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     name: `Engineering Jobs in ${name}`,
@@ -126,19 +138,29 @@ export default async function StateJobsPage({
                 <span className="text-white">{name}</span>
               </nav>
               <span className="mt-7 inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-blue-100">
-                {matching.length} open {matching.length === 1 ? "role" : "roles"}
+                {isSouthCarolinaMarketPage ? "Engineering market guide" : `${matching.length} open ${matching.length === 1 ? "role" : "roles"}`}
               </span>
               <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
-                Engineering jobs in {name}
+                {isSouthCarolinaMarketPage ? `Engineering work in ${name}` : `Engineering jobs in ${name}`}
               </h1>
               <p className="mt-3 max-w-xl text-base leading-relaxed text-blue-100">
-                Current positions listed on JobFolder for {name}.
+                {isSouthCarolinaMarketPage
+                  ? "An overview of transportation systems, infrastructure programs and engineering work across the state."
+                  : `Current positions listed on JobFolder for ${name}.`}
               </p>
             </div>
             <div className="w-full rounded-2xl border border-white/15 bg-white/10 p-6 text-center backdrop-blur-sm lg:w-72">
-              <p className="text-xs font-bold uppercase tracking-wider text-blue-100">Available now</p>
-              <p className="mt-1 text-4xl font-extrabold tracking-tight text-white">{matching.length}</p>
-              <p className="mt-1 text-sm text-blue-100">open {matching.length === 1 ? "position" : "positions"}</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-100">
+                {isSouthCarolinaMarketPage ? `${name} infrastructure` : "Available now"}
+              </p>
+              {isSouthCarolinaMarketPage ? (
+                <p className="mt-3 text-lg font-extrabold leading-snug text-white">Transportation and engineering systems</p>
+              ) : (
+                <>
+                  <p className="mt-1 text-4xl font-extrabold tracking-tight text-white">{matching.length}</p>
+                  <p className="mt-1 text-sm text-blue-100">open {matching.length === 1 ? "position" : "positions"}</p>
+                </>
+              )}
               <div className="mt-5 border-t border-white/15 pt-5">
                 <Link
                   href="/jobs"
@@ -191,7 +213,8 @@ export default async function StateJobsPage({
 
         <section className="bg-slate-50/60 py-10 sm:py-14">
           <Container>
-            <div className="grid gap-8 lg:grid-cols-[15rem_minmax(0,1fr)]">
+            {!isSouthCarolinaMarketPage && (
+              <div className="grid gap-8 lg:grid-cols-[15rem_minmax(0,1fr)]">
               <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
                 <div className="rounded-2xl border border-line bg-white p-5 shadow-sm">
                   <p className="text-xs font-bold uppercase tracking-wider text-muted">Browse jobs</p>
@@ -251,7 +274,8 @@ export default async function StateJobsPage({
                   </div>
                 )}
               </div>
-            </div>
+              </div>
+            )}
 
             <FacetLinks
               title="Explore other states"
@@ -265,7 +289,7 @@ export default async function StateJobsPage({
       <Footer />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify([collectionSchema, breadcrumbSchema]).replace(/</g, "\\u003c") }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify([pageSchema, breadcrumbSchema]).replace(/</g, "\\u003c") }}
       />
     </>
   );
