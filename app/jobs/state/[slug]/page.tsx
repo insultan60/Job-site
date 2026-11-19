@@ -32,13 +32,13 @@ export async function generateMetadata({
   const matching = jobsInState(jobs, slug);
   const state = getJobState(slug);
   const name = state?.name || (matching[0] && stateOf(matching[0].location)) || titleFromSlug(slug);
-  const isSouthCarolinaMarketPage = slug === "south-carolina" && matching.length === 0;
-  const title = isSouthCarolinaMarketPage
+  const isMarketInformationPage = ["south-carolina", "washington"].includes(slug) && matching.length === 0;
+  const title = isMarketInformationPage
     ? `Engineering Market and Infrastructure in ${name}`
     : matching.length > 0
     ? `Engineering Jobs in ${name} - ${matching.length} Open Role${matching.length === 1 ? "" : "s"}`
     : `Engineering Jobs and Infrastructure Resources in ${name}`;
-  const description = isSouthCarolinaMarketPage
+  const description = isMarketInformationPage
     ? `An overview of ${name}'s transportation systems, infrastructure programs and engineering work on ${SITE_NAME}.`
     : matching.length > 0
     ? `${matching.length} open engineering, DOT and infrastructure role${matching.length === 1 ? "" : "s"} in ${name} on ${SITE_NAME}.`
@@ -63,14 +63,14 @@ export default async function StateJobsPage({
   const state = getJobState(slug);
   const name = state?.name || (matching[0] && stateOf(matching[0].location)) || titleFromSlug(slug);
   const guide = getStateGuide(slug);
-  const isSouthCarolinaMarketPage = slug === "south-carolina" && matching.length === 0 && Boolean(guide);
+  const isMarketInformationPage = ["south-carolina", "washington"].includes(slug) && matching.length === 0 && Boolean(guide);
   const categories = categoryFacets(matching);
   const stateFacets = jobStates.map((item) => ({
     name: item.name,
     slug: item.slug,
     count: jobsInState(jobs, item.slug).length,
   }));
-  const pageSchema = isSouthCarolinaMarketPage ? {
+  const pageSchema = isMarketInformationPage ? {
     "@context": "https://schema.org",
     "@type": "WebPage",
     name: `Engineering Market and Infrastructure in ${name}`,
@@ -138,22 +138,22 @@ export default async function StateJobsPage({
                 <span className="text-white">{name}</span>
               </nav>
               <span className="mt-7 inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-blue-100">
-                {isSouthCarolinaMarketPage ? "Engineering market guide" : `${matching.length} open ${matching.length === 1 ? "role" : "roles"}`}
+                {isMarketInformationPage ? "Engineering market guide" : `${matching.length} open ${matching.length === 1 ? "role" : "roles"}`}
               </span>
               <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
-                {isSouthCarolinaMarketPage ? `Engineering work in ${name}` : `Engineering jobs in ${name}`}
+                {isMarketInformationPage ? `Engineering work in ${name}` : `Engineering jobs in ${name}`}
               </h1>
               <p className="mt-3 max-w-xl text-base leading-relaxed text-blue-100">
-                {isSouthCarolinaMarketPage
+                {isMarketInformationPage
                   ? "An overview of transportation systems, infrastructure programs and engineering work across the state."
                   : `Current positions listed on JobFolder for ${name}.`}
               </p>
             </div>
             <div className="w-full rounded-2xl border border-white/15 bg-white/10 p-6 text-center backdrop-blur-sm lg:w-72">
               <p className="text-xs font-bold uppercase tracking-wider text-blue-100">
-                {isSouthCarolinaMarketPage ? `${name} infrastructure` : "Available now"}
+                {isMarketInformationPage ? `${name} infrastructure` : "Available now"}
               </p>
-              {isSouthCarolinaMarketPage ? (
+              {isMarketInformationPage ? (
                 <p className="mt-3 text-lg font-extrabold leading-snug text-white">Transportation and engineering systems</p>
               ) : (
                 <>
@@ -213,7 +213,7 @@ export default async function StateJobsPage({
 
         <section className="bg-slate-50/60 py-10 sm:py-14">
           <Container>
-            {!isSouthCarolinaMarketPage && (
+            {!isMarketInformationPage && (
               <div className="grid gap-8 lg:grid-cols-[15rem_minmax(0,1fr)]">
               <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
                 <div className="rounded-2xl border border-line bg-white p-5 shadow-sm">
