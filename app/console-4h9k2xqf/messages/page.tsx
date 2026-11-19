@@ -108,7 +108,7 @@ export default function AdminMessagesPage() {
       await setMessageHandled(m.id, next);
     } catch (err) {
       setMessages((list) => list.map((x) => (x.id === m.id ? { ...x, handled: !next } : x)));
-      setError(errorMessage(err, "Could not update that enquiry."));
+      setError(errorMessage(err, "Could not update that inquiry."));
     } finally {
       setBusyId(null);
     }
@@ -125,7 +125,7 @@ export default function AdminMessagesPage() {
       await setMessageSleeping(m.id, next);
     } catch (err) {
       setMessages((list) => list.map((x) => (x.id === m.id ? { ...x, sleeping: !next } : x)));
-      setError(errorMessage(err, "Could not update that enquiry."));
+      setError(errorMessage(err, "Could not update that inquiry."));
     } finally {
       setBusyId(null);
     }
@@ -149,7 +149,7 @@ export default function AdminMessagesPage() {
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="eyebrow uppercase">Inbox</p>
-          <h1 className="mt-1.5 text-xl font-extrabold tracking-tight text-ink">Enquiries</h1>
+          <h1 className="mt-1.5 text-xl font-extrabold tracking-tight text-ink">Inquiries</h1>
           <p className="mt-1 text-xs text-muted">
             Everything sent through the contact form on jobfolder.com.
             {counts.new > 0 && ` ${counts.new} still to answer.`}
@@ -214,7 +214,7 @@ export default function AdminMessagesPage() {
         </div>
       )}
 
-      {error && <LoadError what="enquiries" message={error} onRetry={load} />}
+      {error && <LoadError what="inquiries" message={error} onRetry={load} />}
 
       {loading ? (
         <div className="grid h-48 place-items-center rounded-2xl border border-line bg-white">
@@ -223,12 +223,12 @@ export default function AdminMessagesPage() {
       ) : shown.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-line bg-white p-12 text-center">
           <h2 className="font-bold text-ink">
-            {messages.length === 0 ? "No enquiries yet" : "Nothing here"}
+            {messages.length === 0 ? "No inquiries yet" : "Nothing here"}
           </h2>
           <p className="mt-1 text-sm text-muted">
             {messages.length === 0
               ? "Messages sent through the contact form will appear here."
-              : "No enquiry matches this filter or search."}
+              : "No inquiry matches this filter or search."}
           </p>
         </div>
       ) : (

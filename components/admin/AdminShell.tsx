@@ -25,7 +25,7 @@ const groups = [
       { label: "Add new job", href: adminRoutes.newJob, icon: "M10 4v12M4 10h12" },
       { label: "Submissions", href: adminRoutes.submissions, icon: "M4 4h12v12H4zM7 8h6M7 11h6" },
       { label: "Recruiters", href: `${adminRoutes.recruiters}?status=all`, icon: "M13 13a3 3 0 10-6 0M10 8a2.5 2.5 0 100-5 2.5 2.5 0 000 5M15 13a2.5 2.5 0 00-3-2.4M5 13a2.5 2.5 0 013-2.4" },
-      { label: "Enquiries", href: adminRoutes.messages, icon: "M3 5h14v10H3zM3 5l7 5 7-5" },
+      { label: "Inquiries", href: adminRoutes.messages, icon: "M3 5h14v10H3zM3 5l7 5 7-5" },
       { label: "Recruiter leads", href: adminRoutes.siteLeads, icon: "M10 2a8 8 0 100 16 8 8 0 000-16zM2 10h16M10 2c2 2.2 3 5 3 8s-1 5.8-3 8c-2-2.2-3-5-3-8s1-5.8 3-8z" },
       { label: "Message templates", href: adminRoutes.templates, icon: "M3 5h14v10H3zM3 5l7 5 7-5M7 17h6" },
       { label: "Board filters", href: adminRoutes.categories, icon: "M3 5h6v6H3zM11 5h6v6h-6zM3 13h6v4H3zM11 13h6v4h-6z" },
