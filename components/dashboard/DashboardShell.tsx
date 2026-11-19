@@ -23,7 +23,7 @@ const navGroups = [
         icon: "M6 3h6l4 4v10H6zM12 3v4h4",
       },
       {
-        label: "Enquiries",
+        label: "Inquiries",
         href: "/dashboard/leads",
         icon: "M3 5h14v10H3zM3 5l7 5 7-5",
       },
@@ -53,7 +53,7 @@ const navGroups = [
         icon: "M10 3a4 4 0 00-4 4v3l-1.5 2.5h11L14 10V7a4 4 0 00-4-4zM8.5 16a1.5 1.5 0 003 0",
       },
       {
-        label: "My enquiries",
+        label: "My inquiries",
         href: "/dashboard/enquiries",
         icon: "M3 5h14v10H3zM3 5l7 5 7-5",
       },
