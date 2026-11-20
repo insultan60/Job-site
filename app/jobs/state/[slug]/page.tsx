@@ -32,7 +32,7 @@ export async function generateMetadata({
   const matching = jobsInState(jobs, slug);
   const state = getJobState(slug);
   const name = state?.name || (matching[0] && stateOf(matching[0].location)) || titleFromSlug(slug);
-  const isMarketInformationPage = ["oregon", "south-carolina", "washington"].includes(slug) && matching.length === 0;
+  const isMarketInformationPage = ["alaska", "delaware", "georgia", "oregon", "south-carolina", "washington"].includes(slug) && matching.length === 0;
   const title = isMarketInformationPage
     ? `Engineering Market and Infrastructure in ${name}`
     : matching.length > 0
@@ -63,7 +63,7 @@ export default async function StateJobsPage({
   const state = getJobState(slug);
   const name = state?.name || (matching[0] && stateOf(matching[0].location)) || titleFromSlug(slug);
   const guide = getStateGuide(slug);
-  const isMarketInformationPage = ["oregon", "south-carolina", "washington"].includes(slug) && matching.length === 0 && Boolean(guide);
+  const isMarketInformationPage = ["alaska", "delaware", "georgia", "oregon", "south-carolina", "washington"].includes(slug) && matching.length === 0 && Boolean(guide);
   const categories = categoryFacets(matching);
   const stateFacets = jobStates.map((item) => ({
     name: item.name,
