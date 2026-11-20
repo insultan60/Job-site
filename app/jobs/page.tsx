@@ -161,8 +161,9 @@ export default function JobsPage() {
 
           {/* body: left filter sidebar + listing */}
           <div className="mt-6 grid gap-6 lg:grid-cols-[260px_1fr]">
-            <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start">
-              {activeCount > 0 && (
+            <aside className="lg:sticky lg:top-32 lg:self-start">
+              <div className="space-y-5 lg:max-h-[calc(100dvh-10rem)] lg:overflow-y-auto lg:pr-2 lg:[-ms-overflow-style:none] lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden">
+                {activeCount > 0 && (
                 <button
                   onClick={clearAll}
                   className="text-sm font-semibold text-coral hover:opacity-80"
@@ -197,7 +198,7 @@ export default function JobsPage() {
               </FilterGroup>
 
               <FilterGroup title="Category">
-                <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                <div className="space-y-2">
                   {categories.map((c) => (
                     <FilterCheck
                       key={c}
@@ -240,6 +241,7 @@ export default function JobsPage() {
                   <span>${filters.salaryMax.toLocaleString()}+</span>
                 </div>
               </FilterGroup>
+              </div>
             </aside>
 
             {/* listing */}
