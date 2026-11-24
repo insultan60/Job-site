@@ -16,6 +16,7 @@ import { formatPay } from "@/components/jobFormat";
 import { timeAgo } from "@/lib/dates";
 import { FEE_TIERS, feeTierMeta, feeTierAmount } from "@/lib/feeTiers";
 import { useSavedJobs } from "@/lib/savedJobs";
+import { jobsInState, slugify } from "@/lib/jobTaxonomy";
 
 /* The state list and the pay ceiling used to be hardcoded here. They now come
    from lib/boardFilters (defaults) and the console (overrides), so the board
@@ -65,12 +66,15 @@ export default function JobsPage() {
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    const st = stateFilter !== "All" ? stateFilter.toLowerCase() : null;
+    const stateSlug = stateFilter !== "All" ? slugify(stateFilter) : null;
     const rows = jobs.filter((j) => {
       if (onlySaved && !saved.has(j.id)) return false;
       if (remote && !onsite && !j.remote) return false;
       if (onsite && !remote && j.remote) return false;
-      if (st && !j.location.toLowerCase().includes(st)) return false;
+      /* State pages accept both full names and USPS abbreviations, for example
+         "Arizona" and "AZ". Reuse that same matching logic here so the board
+         cannot undercount a state when the job feed uses its abbreviation. */
+      if (stateSlug && jobsInState([j], stateSlug).length === 0) return false;
       if (types.size && !types.has(j.employmentType)) return false;
       if (cats.size && !cats.has(j.category)) return false;
       if (feeTiers.size && !(j.feeTier && feeTiers.has(j.feeTier))) return false;
