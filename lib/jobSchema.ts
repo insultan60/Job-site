@@ -17,9 +17,17 @@ const EMPLOYMENT_TYPE_MAP: Record<string, string> = {
   Internship: "INTERN",
 };
 
-/** Firestore Timestamp | Date | millis → ISO string. */
+/** MySQL ISO string | Firestore Timestamp | Date | millis → ISO string. */
 function toIso(value: unknown): string | undefined {
   if (!value) return undefined;
+  /* Repository reads return MySQL's created_at as a string. Preserve its date
+     portion instead of parsing it in the server's local timezone; datePosted
+     accepts an ISO calendar date and this avoids accidentally shifting it by a
+     day. */
+  if (typeof value === "string") {
+    const match = value.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+    return match?.[1];
+  }
   if (value instanceof Date) return value.toISOString();
   if (typeof value === "number") return new Date(value).toISOString();
   const ts = value as { toDate?: () => Date };
